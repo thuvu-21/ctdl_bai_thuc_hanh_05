@@ -124,8 +124,6 @@ function read_data(folder)
     (orders=orders,edges=edges)
 end
 
-# --- 4 HÀM TODO ĐÃ HOÀN THIỆN ---
-
 function merge_sort(a::AbstractVector, before::Function)
     length(a) <= 1 && return copy(a)
     mid = div(length(a), 2)
@@ -246,8 +244,6 @@ function knapsack(orders, costs, budget)
     
     (ids=selected_ids, value=best_value, cost=total_cost, table=table)
 end
-
-# --- CÁC PHẦN CÒN LẠI CỦA FRAMEWORK ---
 
 function recursive_benefit(ids,by_id,lo=1,hi=length(ids))
     lo > hi && return 0
@@ -587,55 +583,54 @@ end
 
 mini_profile() = merge(profile("MINI001"),(budget=8,tie=0,trace_id=1,n=3))
 
-function mini_data(;root=joinpath(@__DIR__,"data"),overwrite=false)
-    folder = joinpath(root,"MINI001")
-    paths = [joinpath(folder,"don_hang.csv"),joinpath(folder,"ban_do.csv")]
-    if any(isfile,paths) && !overwrite
-        all(isfile,paths) || throw(ArgumentError("CSV mẫu chưa đầy đủ. Không tự ghi đè."))
-        data = read_data(folder)
-        [(o.id,o.destination,o.service,o.benefit) for o in data.orders] ==
-            [(1,2,1,6),(2,4,1,8),(3,6,1,10)] && data.edges == FIXED_EDGES ||
-            throw(ArgumentError("MINI001 phải giữ đúng dữ liệu mẫu; dùng MSSV cho dữ liệu cá nhân."))
-        return folder
+function mini_data(mssv="N24DCDT092"; root=joinpath(@__DIR__,"data"), overwrite=false)
+    p = profile(mssv)
+    folder = joinpath(root, p.mssv)
+    mkpath(folder)
+    paths = [joinpath(folder,"don_hang.csv"), joinpath(folder,"ban_do.csv")]
+    if any(isfile, paths) && !overwrite
+        all(isfile, paths) || throw(ArgumentError("CSV mẫu chưa đầy đủ. Không tự ghi đè."))
+    else
+        write_data(folder, [Order(1,2,1,6), Order(2,4,1,8), Order(3,6,1,10)], FIXED_EDGES)
     end
-    write_data(folder,[Order(1,2,1,6),Order(2,4,1,8),Order(3,6,1,10)],FIXED_EDGES)
+    folder
 end
 
-function run_mini(;root=joinpath(@__DIR__,"data"),overwrite=false)
-    folder = mini_data(;root=root,overwrite=overwrite)
+function run_mini(mssv="N24DCDT092"; root=joinpath(@__DIR__,"data"), overwrite=false)
+    folder = mini_data(mssv; root=root, overwrite=overwrite)
     data = read_data(folder)
-    s = build_session(data.orders,data.edges,mini_profile())
+    p = merge(profile("MINI001"), (mssv=uppercase(mssv), budget=8, tie=0, trace_id=1, n=3))
+    s = build_session(data.orders, data.edges, p)
     r = plan!(s)
-    println("MINI001 | Ngân sách 8 | DP $(r.optimal.value) | Vét cạn $(r.oracle.value)")
+    println("$(p.mssv) | Ngân sách 8 | DP $(r.optimal.value) | Vét cạn $(r.oracle.value)")
     show_session(s)
-    show_action(s,deliver!(s),"Giao")
-    show_action(s,undo!(s),"Hoàn tác")
+    show_action(s, deliver!(s), "Giao")
+    show_action(s, undo!(s), "Hoàn tác")
     while s.pending.count > 0
-        show_action(s,deliver!(s),"Giao")
+        show_action(s, deliver!(s), "Giao")
     end
-    output = export_result(s,joinpath(folder,"ket_qua.csv"))
+    output = export_result(s, joinpath(folder, "ket_qua.csv"))
     println("Đã xuất: $output")
     s
 end
 
 function main(args=ARGS)
     positional = [a for a in args if !startswith(a,"--")]
-    mssv = isempty(positional) ? nothing : first(positional)
+    mssv = isempty(positional) ? "N24DCDT092" : first(positional)
     overwrite = "--overwrite" in args
     if "--data" in args
-        folder = mssv === nothing || "--mini" in args ? mini_data(;overwrite=overwrite) :
-                    generate_data(mssv;overwrite=overwrite)
+        folder = "--mini" in args ? mini_data(mssv; overwrite=overwrite) :
+                      generate_data(mssv; overwrite=overwrite)
         data = read_data(folder)
         println("Đã tạo/đọc $(length(data.orders)) đơn, $(length(data.edges)) cạnh.")
         println("Dữ liệu: $folder")
-        println("Tiếp theo: hoàn thiện 4 hàm và chạy --mini.")
         return data
     elseif mssv === nothing || "--mini" in args
-        run_mini(;overwrite=overwrite)
+        run_mini(mssv; overwrite=overwrite)
     elseif "--menu" in args
-        run_menu(mssv;overwrite=overwrite)
+        run_menu(mssv; overwrite=overwrite)
     else
-        run_demo(mssv;overwrite=overwrite)
+        run_demo(mssv; overwrite=overwrite)
     end
 end
 
